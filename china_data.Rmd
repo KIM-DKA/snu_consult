@@ -1,0 +1,463 @@
+---
+title: "중국어 성조 데이터 분석"
+output:
+  word_document: default
+  html_document: default
+date: "2022-11-05"
+---
+
+## 분석 개요 
+
+어문학과 자문의뢰에 대한 분석을 진행하며 중국어 성조에 대한 인식 정도에 따른 실험데이터 이다.
+표준중국어 화자들이 음높이의 연속적 변화를 1성과 3성으로 범주적 지각하는 지를 살펴보는 지각실험입니다. 실험자극은 이음절입니다. 첫 번째 음절은 수평조의 전체 음높이가 수직상승합니다. 두 번째 음절은 음높이의 시작점, 종료점, 기울기가 모두 변화합니다. 표준중국어 모어 화자의 지각에 영향을 주는 다양한 인접 환경 요소들을 살펴보는 것이 목적 
+
+### 사용변수 
+- **level** : 첫 음절의 크기
+- **LandR** : 첫 번째 음절 음높이와 두 번째 음절 음높이의 관계. 
+- **LminusR** :  첫 번째 음절 음높이와 두 번째 음절 음높이 차이(Hz)
+- **slope** : 두번째 음절에서의 기울기 
+- **Subject_Code** : 참여자 집단. 중국인, 한국인 고급학습자, 한국인 초급학습자를 뜻함. 
+- **syll1** :  첫 번째 음절에 대한 응답. 6점 리커트. 3성임(-3), 3성과 매우 유사(-2), 3성과 약간 유사(-1), 1성과 약간 유사(1), 1성과 매우 유사(2), 1성임(3)
+- **syll2** : 두 번째 음절에 대한 응답. 4지선다. 1성, 2성, 3성, 4성
+
+
+
+
+```{r, include=FALSE}
+# load library 
+
+require(foreign)
+require(ggplot2)
+require(MASS)
+require(Hmisc) # ordinal pacakage
+require(reshape2) 
+require(nnet) # multinomial package
+library(gtsummary)
+library(dplyr)
+
+```
+
+- 데이터 불러오기 
+
+```{r}
+
+data = read.csv("./china_data.csv")
+
+
+head(data)
+```
+
+
+- 데이터 타입 확인 
+
+```{r}
+str(data)
+```
+- 데이터 타입 변환  
+범주형 변수는 범주형 변수로 변환 
+
+```{r}
+
+data$LandR <- as.factor(data$LandR)
+data$Subject_Code <- as.factor(data$Subject_Code); 
+data$syll1 <- as.factor(data$syll1)
+data$syll2 <- as.factor(data$syll2)
+data$Subject_Code = factor(data$Subject_Code,levels=c('KRn','KRa','Man') )
+
+
+```
+
+- 데이터 변환 
+**LminusR** 변수를 실제 측정된 값으로 변환 (부호 변환 및 level 값 더해주기)
+
+```{r}
+
+data$Landlevel = -data$LminusR + data$level
+data$LminusR = -data$LminusR 
+
+```
+
+
+```{r}
+head(data)
+```
+
+
+- 테이블을 통한 데이터 확인 
+
+```{r}
+
+ft = ftable(xtabs(~ level + Subject_Code + syll1, data = data))
+
+head(ft,30)
+
+```
+
+
+### 간단한 EDA 
+
+```{r}
+ggplot(data, aes(x=as.factor(level) ,fill =as.factor(syll1))) + geom_bar(position='fill') + facet_grid(~Subject_Code) + 
+  labs(title='level 에 따른 참여자 집단에서의 syll1 비율',x ='level')
+```
+
+
+```{r}
+ggplot(data, aes(x=as.factor(level) ,fill =as.factor(syll2))) + geom_bar(position='fill') + facet_grid(LandR ~Subject_Code) + 
+  labs(title='LandR에 따른 syll2 반응',x ='level')
+
+ 
+```
+
+
+```{r}
+ggplot(data, aes(x=as.factor(level) ,fill =as.factor(syll2))) + geom_bar(position='fill') + facet_grid(slope ~Subject_Code) + 
+  labs(title='slope에 따른 syll2 반응 확인',x ='level')
+
+```
+- ordered regression 
+
+![ordinal reg](https://user-images.githubusercontent.com/83544197/200101644-b4dfaec4-59a0-4d20-9102-b1be9f1f31fd.png)
+
+
+#### orinal regression 모델링 
+
+
+```{r}
+syll1_fit <- polr(syll1 ~ level + LandR + LminusR + slope + Subject_Code, data = data, Hess=TRUE)
+summary(syll1_fit)
+```
+- 위 모형의 결과는 아래와 같이 표현 될 수 있다. 
+
+![수식1](https://user-images.githubusercontent.com/83544197/200102259-d50df220-300a-4b55-902c-9c327dfe18bb.png)
+![수식2](https://user-images.githubusercontent.com/83544197/200102293-b6abeff6-1ce8-43ec-b576-01b0defb0a3a.png)
+
+
+- 회귀 계수 
+해석은 간단합니다. 아래 표를 예시로 든다면 Subject code 가 KRa 일 때 (다른 변수가 고정되어 있다면)
+1. 3성임(-3) 대비 3성이 아닐 로그 오즈가 (-2,-1,1,2,3) 0.37746 이다. 
+
+
+![수식3](https://user-images.githubusercontent.com/83544197/200107993-80fb1f9d-8922-4f76-bbcd-8dcadb6e2bf6.png)
+
+2. 3성과 2성 대비 다른 응답일 로그 오즈가 
+
+![수식4](https://user-images.githubusercontent.com/83544197/200107994-d49a1351-a6b3-4f23-86a4-95be3bc6e0fd.png)
+
+
+
+- 교호작용 모형 
+
+
+```{r}
+syll1_inter_fit <- polr(syll1 ~ level + 
+            LandR +
+            LminusR + 
+            slope + 
+            Subject_Code + 
+            Subject_Code*level + 
+            Subject_Code*LandR +  
+            Subject_Code*LminusR+ 
+            Subject_Code*slope
+          
+          , data = data
+          , Hess=TRUE
+          
+          )
+summary(syll1_inter_fit)
+```
+
+
+```{r}
+ctable <- coef(summary(syll1_inter_fit))
+ctable
+
+```
+- p value 
+
+```{r}
+p <- pnorm(abs(ctable[, "t value"]), lower.tail = FALSE) * 2
+(ctable <- cbind(ctable, "p value" = p))
+
+```
+
+- confidence interval 
+
+- 해석을 위해 exponential scale 로 변경 
+
+```{r}
+m_inter_ci = exp(cbind(OR = coef(syll1_inter_fit), confint.default(syll1_inter_fit)))
+m_inter_ci = data.frame(m_inter_ci)
+m_inter_ci$col = rownames(m_inter_ci)
+colnames(m_inter_ci) = c('odds','ci_lower','ci_upper','nm')
+
+m_inter_ci
+```
+- 신뢰구간
+컬럼이 많아 교호작용과 교호작용이 아닌것으로 분리 
+
+```{r}
+ggplot(m_inter_ci[c(1:7),], aes(nm, odds)) +       
+  geom_point(color='red')+
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper))
+```
+
+
+
+```{r}
+ggplot(m_inter_ci[c(8:17),], aes(nm, odds)) +       
+  geom_point(color='red')+
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper))
+```
+
+
+- 실제 모형의 결과를 통해 각 클래스로 분류 될 확률이 어떻게 변하는지 확인 
+
+```{r}
+
+newdata = cbind(
+  data[,colnames(data) %in% c("level","LandR",'LminusR','slope','Subject_Code')],
+  round(predict(syll1_inter_fit,newdata=data,type='probs'),3)
+)
+
+head(newdata)
+
+```
+
+
+
+
+```{r}
+
+syll1_inter_newdata= melt(
+  newdata,
+  id.vars = c("level","LandR",'LminusR','slope','Subject_Code'),
+  variable.name = 'syll1',
+  value.name = 'probs'
+  
+)
+
+head(syll1_inter_newdata)
+
+```
+
+
+
+- syll1 분석 결과 
+각 참여자의 중국어 수준에 따라 해당 level이 변함에 따라 syll1 에서 해당 응답을 할 확률을 나타낸 표이다. 
+실험참여자가 KRa, Man 일떄는 각 반응에 대하여 큰 차이가 없으나, KRn 일 경우 나머지 참여자들과 응답에 대한
+반응이 다를 수 있음을 확인하였다. 
+
+
+```{r}
+ggplot(syll1_inter_newdata, aes(x = level, y = probs, color = Subject_Code)) +
+geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=5))+facet_grid(~syll1)
+```
+
+
+
+## syll2 분석 
+
+- multinomial regression의 경우 각 class 마다 다른 절편과 기울기를 갖으므로 이를 유의하여 분석 
+
+해석은 ordinla 보다 훨씨 직관적. 어떤 클래스 대비 다른 클래스일 오즈의 비를 해석하면 끝 (아래는 예시)
+
+
+![수식5](https://user-images.githubusercontent.com/83544197/200112974-df356c68-21e7-4f76-adb9-f61e9188c6ca.png)
+
+
+
+
+```{r}
+syll2_inter_fit <- multinom(syll2 ~ level + 
+            LandR +
+            LminusR + 
+            slope + 
+            Subject_Code + 
+            Subject_Code*level + 
+            Subject_Code*LandR +  
+            Subject_Code*LminusR+ 
+            Subject_Code*slope
+          
+          , data = data
+          , Hess=TRUE
+          
+          )
+
+```
+```{r}
+summary(syll2_inter_fit)
+```
+
+- 패키지가 자동으로 신뢰구간을 지원하지 않아 직접 데이터 핸들링 처리 필요 
+
+
+```{r}
+syll2_inter_df = as.data.frame(coef(syll2_inter_fit))
+syll2_inter_df
+
+```
+
+
+```{r}
+syll2_inter_se = summary(syll2_inter_fit)$standard.errors
+```
+
+
+```{r}
+
+syll2_inter_df2 = syll2_inter_df[1,]
+syll2_inter_df3 = syll2_inter_df[2,]
+syll2_inter_df4 = syll2_inter_df[3,]
+
+
+syll2_inter_se2 = syll2_inter_se[1,]
+syll2_inter_se3 = syll2_inter_se[2,]
+syll2_inter_se4 = syll2_inter_se[3,]
+
+
+```
+
+
+```{r}
+
+df2_coef <- c()
+df3_coef <- c() 
+df4_coef <- c() 
+
+df2_se <- c()
+df3_se <- c() 
+df4_se <- c() 
+
+
+for(i in 1:18){
+  
+  df2_coef[i] <- syll2_inter_df2[1,i]
+  df3_coef[i] <- syll2_inter_df2[1,i]
+  df4_coef[i] <- syll2_inter_df2[1,i]
+  
+  df2_se[i] <- syll2_inter_se2[i]
+  df3_se[i] <- syll2_inter_se3[i]
+  df4_se[i] <- syll2_inter_se4[i]
+  
+  
+}
+
+
+syll2_df2 <- data.frame(nm = colnames(syll2_inter_df2) , odds = exp(df2_coef), ci_lower = exp(df2_coef) - exp(df2_se) , ci_upper = exp(df2_coef) + exp(df2_se) , t_value = exp(df2_coef)/exp(df2_se))
+syll2_df3 <- data.frame(nm = colnames(syll2_inter_df3) , odds = exp(df3_coef), ci_lower = exp(df3_coef) - exp(df3_se) , ci_upper = exp(df3_coef) + exp(df3_se) , t_value = exp(df3_coef)/exp(df3_se))
+syll2_df4 <- data.frame(nm = colnames(syll2_inter_df4) , odds = exp(df4_coef), ci_lower = exp(df4_coef) - exp(df4_se) , ci_upper = exp(df4_coef) + exp(df4_se) , t_value = exp(df4_coef)/exp(df4_se))
+
+
+```
+
+
+```{r}
+
+syll2_df2[, "p_value"] = pnorm(abs(syll2_df2[, "t_value"]), lower.tail = FALSE) * 2
+syll2_df3[, "p_value"] = pnorm(abs(syll2_df3[, "t_value"]), lower.tail = FALSE) * 2
+syll2_df4[, "p_value"] = pnorm(abs(syll2_df4[, "t_value"]), lower.tail = FALSE) * 2
+
+```
+
+
+```{r}
+syll2_df2
+```
+
+
+- 신뢰구간 (범주가 2일 때)
+
+```{r}
+ggplot(syll2_df2[c(2:8),], aes(nm, odds)) +       
+  geom_point(color='red')+
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper))
+```
+
+
+
+```{r}
+ggplot(syll2_df2[c(9:18),], aes(nm, odds)) +       
+  geom_point(color='red')+
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper))
+```
+
+- 신뢰구간 (범주가 3일 때)
+
+```{r}
+ggplot(syll2_df3[c(2:8),], aes(nm, odds)) +       
+  geom_point(color='red')+
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper))
+```
+
+
+
+```{r}
+ggplot(syll2_df3[c(9:18),], aes(nm, odds)) +       
+  geom_point(color='red')+
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper))
+```
+
+
+- 신뢰구간 (범주가 4일 때)
+
+```{r}
+ggplot(syll2_df4[c(2:8),], aes(nm, odds)) +       
+  geom_point(color='red')+
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper))
+```
+
+
+
+```{r}
+ggplot(syll2_df4[c(9:18),], aes(nm, odds)) +       
+  geom_point(color='red')+
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper))
+```
+
+
+
+ - 예측 모형 구축 
+```{r}
+newdata2 = cbind(
+  data[,colnames(data) %in% c("level","LandR",'LminusR','slope','Subject_Code')],
+  round(predict(syll2_inter_fit,newdata=data,type='probs'),3)
+)
+
+
+syll2_inter_newdata= melt(
+  newdata2,
+  id.vars = c("level","LandR",'LminusR','slope','Subject_Code'),
+  variable.name = 'syll2',
+  value.name = 'probs'
+  
+)
+
+head(syll2_inter_newdata)
+```
+
+
+- syll2 분석 결과 
+각 참여자의 중국어 수준에 따라 해당 level이 변하고, LandR 에따라 syll2의 선택지를 선택하는 확률을 나타낸 표이다. 
+
+
+```{r}
+ggplot(syll2_inter_newdata, aes(x = level, y = probs, color = Subject_Code)) +
+geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=5))+facet_grid(LandR~syll2)
+```
+- 결과 저장 
+```{r}
+
+write.csv(m_inter_ci,"syll1_결과_not_pval.csv", row.names = FALSE)
+write.csv(ctable,"syll1_결과.csv", row.names = FALSE)
+
+write.csv(syll2_df2,"syll2_2_결과.csv", row.names = FALSE)
+
+write.csv(syll2_df3,"syll2_3_결과.csv", row.names = FALSE)
+
+write.csv(syll2_df4,"syll2_4_결과.csv", row.names = FALSE)
+```
+
+
+
+
