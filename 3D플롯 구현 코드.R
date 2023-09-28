@@ -61,16 +61,22 @@ install.packages("rgl")
 # 라이브러리 불러오기
 library(rgl)
 
-# 그룹별로 색상을 정의합니다.
-group_colors <- c(G1 = "red", G2 = "blue", G3 = "green", G4 = "yellow")
+# 그룹별로 색상과 모양(문자)을 정의합니다.
+group_colors <- c(G1 = "red", G2 = "blue", G3 = "green", G4 = "orange")
+group_texts <- c(G1 = "G1", G2 = "G2", G3 = "G3", G4 = "G4")  
 
-# 3D 그래프를 그립니다.
-with(resv_df, plot3d(MDS1, MDS2, MDS3, type="s", col=group_colors[Group], size=0.5, xlab="MDS1", ylab="MDS2", zlab="MDS3"))
+# 먼저 빈 그래프를 그립니다.
+plot3d(1, 1, 1, type = "n", xlim = range(resv_df$MDS1), ylim = range(resv_df$MDS2), zlim = range(resv_df$MDS3), xlab="MDS1", ylab="MDS2", zlab="MDS3")
 
-# 범례를 추가합니다.
-legend3d("topright", legend = names(group_colors), fill = group_colors, border = group_colors, inset = c(-0.2, 0))
+# 그룹별로 text3d 함수를 사용하여 그림을 그립니다.
+for (group in unique(resv_df$Group)) {
+  subset_df <- resv_df[resv_df$Group == group, ]
+  with(subset_df, text3d(MDS1, MDS2, MDS3, text=group_texts[group], color=group_colors[group]))
+}
 
-# 추가적인 축(선) 그리기
+# 범례에 문자(모양)를 추가합니다.
+legend3d(x=0.1, y=0.95, legend = names(group_colors), fill = group_colors, border = group_colors, 
+         inset = c(-0.2, 0), horiz=TRUE, pch = as.character(group_texts))
 
 # MDS1 축
 lines3d(c(-1, 1), c(0, 0), c(0, 0), col = "black", lwd = 2)
